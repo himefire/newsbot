@@ -1,0 +1,49 @@
+
+name: Daily NewsBot
+
+on:
+  schedule:
+    # UTC 23:00 = 日本時間 08:00
+    - cron: '0 23 * * *'
+  workflow_dispatch:   # 手動実行も可
+
+jobs:
+  run-daily-news:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1) リポジトリを取得
+    - uses: actions/checkout@v3
+
+    # 2) Python を用意
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    # 3) 依存をインストール
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    # 4) ニュース生成スクリプトを実行
+    - name: Run daily_news.py
+      run: |
+        python daily_news.py
+      env:                  # ← .env の代替として Secrets を注入
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        SAVE_DIR: output                 # GitHub 上の保存先
+        NICKNAME:       ${{ secrets.NICKNAME }}
+        PROFILE:        ${{ secrets.PROFILE }}
+        AI_FEEDS:       ${{ secrets.AI_FEEDS }}
+        CRYPTO_FEEDS:   ${{ secrets.CRYPTO_FEEDS }}
+
+    # 5) 生成された Markdown をコミット & Push
+    - name: Commit and push news
+      run: |
+        git config --global user.name  github-actions[bot]
+        git config --global user.email actions@github.com
+        git add output/
+        git commit -m "auto: news $(date +'%Y-%m-%d')" || echo "nothing to commit"
+        git push
+
