@@ -9,8 +9,11 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import openai
 import pytz
+import re
 
-# 1) 環境変数読み込み
+# --------------------------------------------------
+# 1) .env を読み込む
+# --------------------------------------------------
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -27,13 +30,9 @@ if not all([OPENAI_API_KEY, SAVE_DIR, NICKNAME, PROFILE]):
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 os.makedirs(SAVE_DIR, exist_ok=True)
 
-KEYWORDS_AI = [
-    "ai", "人工知能", "生成ai", "chatgpt", "gpt", "openai",
-    "llm", "large language model", "llms", "gemini", "bard", "claude"
-]
+KEYWORDS_AI     = ["ai", "人工知能", "生成ai", "chatgpt", "gpt", "openai"]
 KEYWORDS_CRYPTO = ["仮想通貨", "暗号資産", "ビットコイン", "ブロックチェーン", "crypto"]
 
-# JSTタイムゾーン設定と昨日・今日の日付
 jst = pytz.timezone("Asia/Tokyo")
 now = datetime.now(jst)
 today = now.date()
@@ -51,12 +50,10 @@ def fetch_feed(feed_urls, keywords):
     results = []
     for url in feed_urls:
         feed = feedparser.parse(url)
-        print(f"[DEBUG] {url} の件数: {len(feed.entries)}")
         for entry in feed.entries[:20]:
             title = entry.title.lower()
             summary = getattr(entry, "summary", "").lower()
             published = getattr(entry, "published", "")
-            print(f"[DEBUG] {title} | {published}")
             if any(k in title or k in summary for k in keywords):
                 if is_recent(published):
                     results.append({
@@ -68,7 +65,10 @@ def fetch_feed(feed_urls, keywords):
 
 def fetch_text(url):
     try:
-        res = requests.get(url, timeout=10)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+        }
+        res = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(res.text, "html.parser")
         paragraphs = [p.get_text(" ", strip=True) for p in soup.find_all("p")]
         return "\n".join(paragraphs)[:2000]
@@ -76,6 +76,8 @@ def fetch_text(url):
         return f"(本文取得失敗: {e})"
 
 def gpt_summary(text):
+    if not text or "本文取得失敗" in text:
+        return "(要約できませんでした)"
     prompt = f"以下のニュース記事を日本語で200字以内に要約してください：\n{text}"
     res = client.chat.completions.create(
         model="gpt-4o",
@@ -98,7 +100,10 @@ def gpt_suggestion(summary):
         max_tokens=500,
         temperature=0.8,
     )
-    return res.choices[0].message.content.strip()
+    suggestion = res.choices[0].message.content.strip()
+    # 「もちろんです」などの文言を削除
+    suggestion = re.sub(r"^もちろんです.*?(以下|次のような|以下のような).*?\n+", "", suggestion, flags=re.DOTALL)
+    return suggestion.strip()
 
 def tag_from_suggestion(suggestion):
     s = suggestion.lower()
