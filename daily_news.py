@@ -10,9 +10,7 @@ from dotenv import load_dotenv
 import openai
 import pytz
 
-# --------------------------------------------------
-# 1) .env を読み込む
-# --------------------------------------------------
+# 1) 環境変数読み込み
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -29,10 +27,13 @@ if not all([OPENAI_API_KEY, SAVE_DIR, NICKNAME, PROFILE]):
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 os.makedirs(SAVE_DIR, exist_ok=True)
 
-KEYWORDS_AI     = ["ai", "人工知能", "生成ai", "chatgpt", "gpt", "openai"]
+KEYWORDS_AI = [
+    "ai", "人工知能", "生成ai", "chatgpt", "gpt", "openai",
+    "llm", "large language model", "llms", "gemini", "bard", "claude"
+]
 KEYWORDS_CRYPTO = ["仮想通貨", "暗号資産", "ビットコイン", "ブロックチェーン", "crypto"]
 
-# JSTの昨日〜今日の範囲を求める
+# JSTタイムゾーン設定と昨日・今日の日付
 jst = pytz.timezone("Asia/Tokyo")
 now = datetime.now(jst)
 today = now.date()
@@ -50,10 +51,12 @@ def fetch_feed(feed_urls, keywords):
     results = []
     for url in feed_urls:
         feed = feedparser.parse(url)
+        print(f"[DEBUG] {url} の件数: {len(feed.entries)}")
         for entry in feed.entries[:20]:
             title = entry.title.lower()
             summary = getattr(entry, "summary", "").lower()
             published = getattr(entry, "published", "")
+            print(f"[DEBUG] {title} | {published}")
             if any(k in title or k in summary for k in keywords):
                 if is_recent(published):
                     results.append({
